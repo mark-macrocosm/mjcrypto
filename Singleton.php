@@ -1,7 +1,6 @@
 <?php
 
-require_once('Chain.php');
-
+// Don't include external libraries
 
 /**
  * Please fix the items marked with "@TODO" in this class
@@ -11,9 +10,56 @@ require_once('Chain.php');
  * One exception to PSR-2: opening braces MUST always be on the same line 
  * for classes, methods, functions, and control structures
  */
-class Singleton 
-{
-    // @TODO Implement Singleton functionality
+class Singleton { // opening braces on the same line (see above)
+
+    /**
+     * Singleton instance
+     * 
+     * @var Singleton
+     */
+    protected static $_instance = null;
+    
+    /**
+     * Use constants for immutable types instead of variables
+     * Use descriptive names
+     */
+    const STRING_A      = 'A';
+    const STRING_A_LONG = 'stringA';
+    const STRING_B_LONG = 'stringB';
+    const STRING_NON_A  = '^A';
+    const STRING_NON_B  = '^B';
+    const STRING_NON_C  = '^C';
+    const STRING_ABC    = 'ABC';
+    const INT_A         = 1;
+    const INT_B         = 2;
+    
+    /**
+     * Directory where users have read-only access to certain file types
+     */
+    const PATH_FILES = '/real/path/to/files';
+    
+    /**
+     * Get a singleton instance
+     * 
+     * @return Singleton
+     */
+    public static function getInstance() {
+        if (null === self::$_instance) {
+            self::$_instance = new self();
+        }
+
+        return self::$_instance;
+    }
+    
+    /**
+     * Inaccessible constructor
+     */
+    protected function __construct () {}
+    
+    /**
+     * Prevents this class from being cloned
+     */
+    protected function __clone() {}
     
     /**
      * Display user name
@@ -21,7 +67,8 @@ class Singleton
      * @param string $name User-provided name
      */
     public function userEcho($name) {
-        $name = trim($this->sanitizeInput($name));
+        // Prevent XSS
+        $name = filter_var($name, FILTER_SANITIZE_STRING);
 
         echo "The value of 'name' is '{$name}'";
     }
@@ -32,22 +79,18 @@ class Singleton
      * @param string $name User-provided name
      */
     public function userQuery($name) {
-        // @TODO Validate & sanitize $name
-        $db = new mysqli("localhost","root","","users");
+        // Never store DB credentials in plain text
+        # $db = new mysqli("localhost","root","","users");
 
-        // connection check
-        if ($db->connect_errno) {
-            echo "Connection error: " . $db->connect_error;
-            exit();
-        }
-
-        $sql = "SELECT * FROM `users` WHERE `name` = '{$name}' LIMIT 1";
-
+        // Prevent SQL injections; escape the string or use prepared statements
         $name = mysqli_real_escape_string($db, $name);
-
-        $result = mysqli_query($db, $sql);
-
-        return $result->num_rows;
+        $sql = "SELECT * FROM `users` WHERE `name` = '{$name}' LIMIT 1";
+        
+        // The SQL is already malformed at this point
+        # $name = mysqli_real_escape_string($db, $name);
+        
+        // Don't assume/change return type
+        # return $result->num_rows;
     }
     
     /**
@@ -56,35 +99,48 @@ class Singleton
      * @param string $path User-provided file path
      */
     public function userFile($path) {
-        // @TODO Validate & sanitize $path
-        $path = filter_var($path, FILTER_SANITIZE_URL);
-        readfile($path);
+        // User paths are relative to this root
+        $root = self::PATH_FILES;
+
+        // The main point is to never allow users to perform directory traversal
+        // Special characters like "." and ".." and direct root access should be forbidden
+        // Validate relative path, file name and extension
+        if (!preg_match('%^(?:allowed_subpath_a|allowed_subpath_b)\/\w+\.(?:ext|png|jpe?g)$%i', $path)) {
+            throw new Exception('Invalid file path');
+        }
+
+        // File not found; also check that it's a file, not a directory
+        if (!is_file("$root/$path")) {
+            throw new Exception('File not found');
+        }
+        
+        readfile("$root/$path");
     }
     
     /**
      * Nested conditions
      */
     public function nestedConditions() {
-        // @TODO Untangle nested conditions
-        $conditionA = true;
-        $conditionB = true;
-        $conditionC = false;
+        // Don't introduce new constants
+        // The do {} while(false) technique avoids multiple returns
+        do {
+            if (!$conditionA) {
+                echo self::STRING_NON_A;
+                break;
+            }
 
-        if (! $conditionA){
-            echo '^A';
-        }
-        
-        if ($conditionA && (! $conditionB)){
-            echo '^B';
-        }
+            if (!$conditionB) {
+                echo self::STRING_NON_B;
+                break;
+            }
 
-        if ($conditionA && $conditionB && (! $conditionC)){
-            echo '^C';
-        }
+            if (!$conditionC) {
+                echo self::STRING_NON_C;
+                break;
+            }
 
-        if ($conditionA && $conditionB && $conditionC){
-            echo 'ABC';
-        }
+            echo self::STRING_ABC;
+        } while(false);
     }
     
     /**
@@ -93,18 +149,19 @@ class Singleton
      * @return boolean
      */
     public function returnStatements() {
-        // @TODO Fix
-        $conditionA = 'A';
+        // Don't alter the function behavior; one return per function
+        if ($conditionA) {
+            echo self::STRING_A;
+        }
 
-        return ($conditionA) ? true : false;
+        // Implicit boolean conversion
+        return !!$conditionA;
     }
     
     /**
      * Null coalescing
      */
     public function nullCoalescing() {
-        // @TODO Simplify
-
         return $_GET['name'] ?? $_POST['name'] ?? 'nobody';
     }
     
@@ -112,36 +169,31 @@ class Singleton
      * Method chaining
      */
     public function methodChained() {
-        // @TODO Implement method chaining
-
-        return (new Chain)
-            ->name('Angela Markov')
-            ->age(50)
-            ->gender('Female')
-            ->bio();
+        return $this;
     }
     
     /**
      * Immutables are hard to find
+     * 
+     * @return int|null
      */
     public function checkValue($value) {
         $result = null;
-        
-        // @TODO Make all the immutable values (int, string) in this class 
-        // easily replaceable
+
+        // We should't use constants (strings, ints) locally
+        // Store them as class constants instead
         switch ($value) {
-            case 'stringA':
-                $result = 1;
+            case self::STRING_A_LONG:
+                $result = INT_A;
+                break;
+
+            case self::STRING_B_LONG:
+                $result = INT_B;
                 break;
                 
-            case 'stringB':
-                $result = 2;
-                break;
-            
-            default:
-            $result = 0;
+            // The default is already set, its' null
         }
-        
+
         return $result;
     }
     
@@ -152,41 +204,23 @@ class Singleton
      * @return boolean
      */
     public function regexTest($time24Hour) {
-        // @TODO Implement RegEx and return type; validate & sanitize input
-        $time24Hour = trim($time24Hour);
-        $time24Hour = ('([01]?[0-9]|2[0-3]):[0-5][0-9]') ? $time24Hour.':00' : $time24Hour;
-
-        $pattern = '([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]';
-
-        return preg_match('%'.$pattern.'%', $time24Hour);
-    }
-
-
-    protected function sanitizeInput($string, $length = null, $html = false, $strip_tags = true){
-
-        $length = 0 + $length;
-
-		if(! $html){
-            return ($length > 0) ? substr(addslashes(trim(preg_replace('/<[^>]*>/', '', $string))),0,$length) : 
-                addslashes(trim(preg_replace('/<[^>]*>/', '', $string)));
-        }
-
-        $string = utf8_decode(trim($string)); // avoid unicode code issues
-
-        $allow  = "<b><h1><h2><h3><h4><h5><h6><br><br /><hr><hr /><em><strong><a><ul>
-            <ol><li><dl><dt><dd><table><tr><th><td><blockquote><address><div><p><span><i><u><s><sup><sub><style><tbody>";
+        // No need to type cast to string, preg_match will do that
+        # $time24Hour = trim($time24Hour);
         
-        if($strip_tags){
-            $string = strip_tags($string, $allow);
-        }
+        // This is a string, implicitly converted to true
+        # $time24Hour = ('([01]?[0-9]|2[0-3]):[0-5][0-9]') ? $time24Hour.':00' : $time24Hour;
+        
+        // Regex fails to catch 20:15
+        // Regex catches 0:00:00 by mistake (hours should be left-padded)
+        # $pattern = '([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]';
 
-        // convert HTML characters
-		$string = str_replace("#", "#", htmlentities($string));
-		$string = addslashes(str_replace("%", "%", $string));
-		if($length > 0){
-            $string = substr($string, 0, $length);
-        }
-
-		return $string;
+        // No other sanitization is needed except the regex
+        // 0 left padding - so [01]\d instad of [01]?\d (02:00 instead of 2:00)
+        // DRY - don't repeat yourself, the 00-59 minute/second block can appear once or twice
+        // Don't use capturing blocks if you don't need them - (?:) instead of ()
+        // preg_match returns 0,1 or false; expected return value is boolean
+        return !!preg_match('#^(?:[01]\d|2[0-3])(:[0-5]\d){1,2}$#', $time24Hour);
     }
 }
+
+/*EOF*/
